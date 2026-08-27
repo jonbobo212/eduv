@@ -44,3 +44,28 @@
     max-width: 100%;
   }
 }
+
+/* 3. White strip below the footer when you scroll past the end on iOS.
+      Rubber-band overscroll paints the exposed area with the canvas
+      background, which is taken from <html>. Here <html> has no background,
+      so it falls back to <body>'s white - and you bounce off a dark navy
+      footer into a white gap.
+
+      Suppressing the bounce is what actually removes it: colouring <html>
+      instead would fix the bottom but tint the overscroll at the top, where
+      the page is light. */
+html {
+  overscroll-behavior-y: none;
+}
+body {
+  overscroll-behavior-y: none;
+  /* Belt and braces for engines that still expose a strip: match the footer
+     so anything revealed past the end reads as part of it. */
+  background-color: #fff;
+}
+
+/* The last section is the footer, so anchor its colour to the page end. */
+footer {
+  box-shadow: 0 50vh 0 0 rgb(10, 20, 33);
+  clip-path: inset(0 0 -50vh 0);
+}
