@@ -1,109 +1,122 @@
-# eduv — site mirror toolkit
+# eduv — Eduvisa site mirror
 
-A four-pass pipeline that produces a self-contained, byte-faithful static copy
-of `eduvisaconsulting.com`, then measures how close the copy actually is.
+Makes a self-contained static copy of the live Eduvisa Consulting site so it
+can be relaunched on **eduvisaconsulting.uz**, a domain the business controls.
+
+Runs on Windows, macOS and Linux. Node 18+ is the only requirement — no bash,
+no wget, no jq.
 
 ## Status
 
-**The copy has not been made yet.** The Claude Code session this was built in
-runs behind an egress proxy that denies `eduvisaconsulting.com` at the CONNECT
-stage:
+**The copy has not been made.** The Claude Code session this was built in sits
+behind an egress proxy that refuses `eduvisaconsulting.com` at the CONNECT
+stage (HTTP 403). No page, image, or stylesheet from the site was ever
+retrieved here, so nothing in this repo is derived from guesswork about the
+design — it is the machinery to do the copy, not the copy.
 
-```
-kind:   connect_rejected
-detail: gateway answered 403 to CONNECT (policy denial or upstream failure)
-host:   eduvisaconsulting.com:443
-```
+Run it from an ordinary machine with normal internet access and you get the
+real thing. Every pass is tested end to end against a local fixture.
 
-Both `curl` and the sandbox's fetch tool were refused, so no page, image, or
-stylesheet from the site was ever retrieved. Rather than guess at the design,
-this repo contains the machinery to do the copy properly. Run it from any
-machine with normal internet access and you get the real thing — or allowlist
-the domain on the environment and run it here.
-
-Everything below has been tested end-to-end against a local fixture site
-(animations, scroll-triggered lazy images, absolute CDN-style URLs, multi-page
-crawl). The passes work; they just need reachable input.
+Note the `.com` is still **publicly served**, so mirroring needs no account
+access and no password — only a network that can reach it. Losing control of
+the domain does not prevent copying what it serves.
 
 ## Run it
 
 ```bash
 npm install
-npm run copy     # mirror -> capture -> rewrite
-npm run serve    # preview at http://localhost:8080
-npm run verify   # pixel-diff the copy against the live site
+npm run doctor    # check prerequisites and that the site is reachable
+npm run copy      # capture -> harvest -> rewrite
+npm run serve     # preview at http://localhost:8080
+npm run verify    # pixel-diff the copy against the live site
 ```
 
-`npm run copy` is the whole job. `verify` needs the live site reachable too.
+Start with `doctor`. It fails loudly if the site is unreachable, which saves
+you a long crawl that would otherwise fill `site/` with error pages.
 
-## The four passes
+## The passes
 
-| Pass | Command | What it does |
-|---|---|---|
-| 1 | `npm run mirror` | `wget` recursive pull — HTML, CSS, JS, images, fonts. Catches everything reachable by parsing markup and stylesheets. |
-| 2 | `npm run capture` | Headless Chromium renders each page, scrolls it top to bottom, and saves **every response the browser fetches**. This is what gets the JS-injected images, lazy-loaded media, and webfonts pass 1 cannot see. Also writes an animation audit and full-page screenshots at 4 breakpoints. |
-| 3 | `npm run rewrite` | Repoints every absolute and CDN URL at the local copy, in both HTML attributes and CSS `url()`. Ends by listing anything still loading off-box. |
-| 4 | `npm run verify` | Screenshots live vs. local at each breakpoint and pixel-diffs them. Prints a % difference per page and writes a diff image wherever it drifts. |
+| Pass | What it does |
+|---|---|
+| **capture** | Headless Chromium loads each page, scrolls it top to bottom, and saves every response it fetches. This is what gets the JS-injected and lazy-loaded imagery a plain download misses. Also crawls internal links, writes a per-page animation audit, and screenshots four breakpoints. |
+| **harvest** | Parses the saved HTML and CSS for assets that are *referenced but were never loaded* — other `srcset` candidates, `preload`/icon links, `og:image`, and `url()` inside media queries that don't apply at the captured viewport. Fetches them and repeats until nothing new appears. |
+| **rewrite** | Repoints every absolute and CDN URL at the local copy — HTML attributes, `srcset` lists, `<meta>` content, and CSS `url()`. Ends by naming anything still loading off-box. |
+| **verify** | Screenshots live vs. local at each breakpoint and pixel-diffs them, writing a diff image wherever the copy drifts. |
 
-Passes 1 and 2 overlap deliberately — that redundancy is what closes the gap
-between "looks right" and "is the same".
+`capture` and `harvest` are complementary and both matter. Capture alone misses
+the responsive variants — resize the copy on a phone and you get a broken
+image. Harvest alone would miss everything that only exists after JS runs.
 
-## Why two fetch passes
+## Why harvest exists
 
-`wget` alone misses anything that only exists after JavaScript runs, which on a
-modern marketing site is usually most of the imagery. The browser pass fixes
-that by recording traffic rather than parsing source: it scrolls the full page
-so lazy-loaders and scroll-reveal animations fire, then saves what came over
-the wire. Anything either pass finds lands in the same tree.
+Tested against a fixture where the browser loaded exactly one image but the
+markup referenced five. Capture saved 1. Harvest recovered the 2x and 3x
+`srcset` candidates, the `og:image`, and a background used only under
+`@media (max-width:500px)` — then confirmed on a second round that nothing was
+left. Rewrite pointed all of them at local files.
 
 ## Animations
 
-`audit/*.json` (per page) records:
+`audit/*.json` records, per page:
 
-- every `@keyframes` block, verbatim
-- every rule carrying an `animation`, `transition`, `transform`, or `will-change`
-- computed timing for each animated element — duration, delay, easing
-- `data-aos` / `data-scroll` / `data-gsap`-style attributes that drive scroll reveals
-- which animation library is on the page (GSAP, AOS, Swiper, Lenis, Locomotive, …)
-- loaded webfonts and every `<video>` / `<source>`
+- every `@keyframes` block verbatim
+- every rule with `animation`, `transition`, `transform`, or `will-change`
+- computed duration, delay and easing for each animated element
+- `data-aos` / `data-scroll` / `data-gsap`-style scroll-reveal attributes
+- which animation library is present (GSAP, AOS, Swiper, Lenis, Locomotive…)
+- loaded webfonts, and every `<video>` / `<source>`
 
-Since pass 2 downloads the animation library itself, motion is usually carried
-over by the copy rather than reimplemented. The audit is there to check it —
-and to rebuild by hand if a library turns out to be loaded from a host that
-blocks hotlinking.
+Because capture downloads the animation library itself, motion usually carries
+over rather than needing reimplementation. The audit is there to check it, and
+to rebuild by hand if a library turns out to be hotlink-protected.
 
 ## Configuration
 
 `config.json`:
 
 - `origin` — site to copy
-- `outDir` — where the mirror lands (default `site/`)
-- `extraHosts` — CDN / font hosts to pull down too. **If pass 3 reports hosts
-  still loading from the network, add them here and re-run** — that is the loop
-  that gets you to fully self-contained.
+- `outDir` — where the copy lands (default `site/`)
+- `extraHosts` — extra hosts for the optional wget pass
 - `breakpoints` — viewports for screenshots and diffing
 - `maxPages` — crawl ceiling (default 100)
-- `scrollStepPx` / `scrollDelayMs` — scroll pacing. Slow it down if a lazy-loader
-  is being missed.
+- `scrollStepPx` / `scrollDelayMs` — scroll pacing; slow it down if a
+  lazy-loader is being missed
+- `settleMs` — wait after scrolling before snapshotting
+
+If `rewrite` reports hosts still loading from the network, add them to
+`extraHosts` and re-run. That loop is what gets you to fully self-contained.
 
 ## Output
 
 ```
-site/          the copy - open it with the network off, it still works
-audit/         per-page animation audits, manifest, verify results
+site/          the copy - open it with wifi off, it still works
+audit/         per-page animation audits, asset manifest, verify results
 screenshots/   full-page captures at every breakpoint
 diffs/         pixel-diff images, written only where the copy drifts
 ```
 
-`site/` is gitignored by default so the first commit stays reviewable. Once
-you have run the copy and are happy with it, drop that line from `.gitignore`
-to commit the mirror itself.
+`site/` is gitignored so the first commit stays reviewable. Once you have run
+the copy and are happy with it, drop that line from `.gitignore` to commit it.
+
+## Going live on .uz
+
+1. Run the copy, confirm `npm run verify` diffs are near zero
+2. Deploy `site/` to any static host — Cloudflare Pages, Vercel, Netlify
+3. Check it on the host's own preview URL first (`*.pages.dev`, `*.vercel.app`)
+4. Point `eduvisaconsulting.uz` and `www` at it
+5. Set up email separately — the `.com` has no MX records at all
+
+Nothing before step 4 touches DNS, and the `.uz` isn't serving yet, so there is
+no live site to break.
 
 ## Notes
 
-- Backend is out of scope by request. Forms will render but not submit; wire
-  them to whatever endpoint you want afterwards.
-- Chromium resolution order is `CHROME_PATH`, then `/opt/pw-browsers/chromium`,
-  then the system browser, then Playwright's own download — so it runs both in
-  a sandbox with a preinstalled browser and on a normal laptop.
+- Backend is out of scope by request. Forms render but do not submit; wire them
+  to an endpoint afterwards.
+- Prefer the owner's original assets over scraped ones where they exist — real
+  resolution, correct fonts, no recompression.
+- Chromium resolves via `CHROME_PATH`, then `/opt/pw-browsers/chromium`, then
+  the system browser, then Playwright's own download.
+- `npm run mirror:wget` is an optional extra wget pass. It needs bash/wget/jq
+  and is not part of `npm run copy`.
 - Re-running is safe and refreshes content in place.

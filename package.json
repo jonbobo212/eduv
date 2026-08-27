@@ -3,15 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Pixel-faithful static mirror of eduvisaconsulting.com",
+  "description": "Self-contained static mirror of the Eduvisa Consulting site",
   "scripts": {
-    "mirror": "bash tools/mirror.sh",
+    "doctor": "node tools/doctor.mjs",
     "capture": "node tools/capture.mjs",
+    "harvest": "node tools/harvest.mjs",
     "rewrite": "node tools/rewrite.mjs",
+    "copy": "node tools/capture.mjs && node tools/harvest.mjs && node tools/rewrite.mjs",
+    "serve": "node tools/serve.mjs",
     "verify": "node tools/verify.mjs",
-    "serve": "bash tools/serve.sh",
-    "copy": "npm run mirror && npm run capture && npm run rewrite",
-    "postinstall": "node -e \"console.log('run: npx playwright install chromium')\""
+    "mirror:wget": "bash tools/mirror.sh"
   },
   "devDependencies": {
     "playwright": "^1.49.0",
