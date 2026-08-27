@@ -1,0 +1,46 @@
+/* ---------------------------------------------------------------------------
+   Post-build fixes, loaded after the app stylesheet.
+   Kept separate so it is obvious what was changed after the fact.
+   --------------------------------------------------------------------------- */
+
+/* 1. Mobile menu drawer collapsed to zero height.
+      The drawer is `fixed inset-0 top-20`, which should stretch from 80px down
+      to the bottom of the viewport. It does not, because it sits inside the
+      site header and that header has `backdrop-blur-md`. An ancestor with a
+      backdrop-filter becomes the containing block for fixed-position
+      descendants, so the drawer resolves its offsets against the 80px-tall
+      header instead of the viewport: 80 - 80 - 0 = 0.
+      The panel kept its white background but had no box, so the links painted
+      straight over the hero.
+      Giving it an explicit height sidesteps the containing block entirely. */
+[class*="lg:hidden"][class*="fixed"][class*="top-20"] {
+  height: calc(100vh - 5rem);
+  height: calc(100dvh - 5rem); /* dvh: excludes mobile browser chrome */
+  max-height: calc(100dvh - 5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain; /* don't scroll the page behind the drawer */
+}
+
+/* Closed state must not swallow taps: the drawer now has real height even
+   when hidden, so make sure it cannot intercept anything while invisible. */
+[class*="lg:hidden"][class*="fixed"][class*="top-20"][class*="opacity-0"] {
+  visibility: hidden;
+}
+
+@media (max-width: 1023px) {
+  /* 2. Horizontal overflow: fixed-width cards (26/28/32rem = 416-512px) sat
+        unclipped in a 390px viewport, pushing the document to 487px wide and
+        exposing a white gutter when scrolled right. Let them shrink. */
+  [class*="w-[26rem]"],
+  [class*="w-[28rem]"],
+  [class*="w-[32rem]"] {
+    max-width: 100%;
+  }
+
+  /* Backstop for anything else that overhangs. `clip` rather than `hidden`
+     so position:sticky keeps working (hidden creates a scroll container). */
+  html, body {
+    overflow-x: clip;
+    max-width: 100%;
+  }
+}

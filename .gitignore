@@ -1,5 +1,5 @@
-node_modules/
 # The mirror itself IS tracked - it is the deliverable.
-screenshots/
-diffs/
 audit/
+diffs/
+node_modules/
+screenshots/
