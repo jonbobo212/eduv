@@ -1,7 +1,5 @@
 node_modules/
-# Captured output - regenerate with `npm run copy`. Uncomment to commit the
-# mirror itself once you have run it.
-site/
+# The mirror itself IS tracked - it is the deliverable.
 screenshots/
 diffs/
 audit/

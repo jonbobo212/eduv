@@ -71,6 +71,23 @@ function localPathFor(rawUrl, ctype) {
 }
 
 /** Every URL referenced by a chunk of HTML or CSS. */
+function extractRefsFromJs(text) {
+  const out = new Set();
+  // Bundled code refers to assets as plain string literals:
+  //   "/assets/curtinuniversity-C6v_Hy2G.png"
+  // Match quoted paths ending in an asset extension.
+  const ASSET = /["'`]([^"'`\s]+\.(?:png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|otf|mp4|webm|mp3|json))["'`]/gi;
+  for (const m of text.matchAll(ASSET)) {
+    const v = m[1];
+    if (/^(data:|blob:)/i.test(v)) continue;
+    // UI strings can look like filenames ("Foto 3x4 (jpg or png)"). A real
+    // path has no spaces, parentheses or commas - skip the prose.
+    if (/[\s(),]/.test(v)) continue;
+    out.add(v);
+  }
+  return [...out];
+}
+
 function extractRefs(text, isCss) {
   const out = new Set();
   const add = (v) => { if (v) out.add(v.trim()); };
@@ -95,12 +112,16 @@ function extractRefs(text, isCss) {
 
 const SKIP = /^(data:|blob:|javascript:|mailto:|tel:|#|about:)/i;
 
-function resolveRef(ref, fromRel) {
+function resolveRef(ref, fromRel, isJs = false) {
   if (!ref || SKIP.test(ref)) return null;
   const baseUrl = relToUrl.get(fromRel);
   if (!baseUrl) return null;
   try {
-    const u = new URL(ref, baseUrl);
+    // A bare filename inside a bundle ("16.png") is data, not a path relative
+    // to the bundle: the build emits the file at the site root, so resolving
+    // it against /assets/ gives a 404. Try the root for those.
+    const base = (isJs && !ref.includes('/')) ? ORIGIN.href : baseUrl;
+    const u = new URL(ref, base);
     if (!/^https?:$/.test(u.protocol)) return null;
     u.hash = '';
     return u.href;
@@ -136,15 +157,17 @@ async function main() {
     const candidates = new Set();
 
     for (const file of walk(OUT)) {
-      if (!/\.(html?|css)$/i.test(file)) continue;
+      if (!/\.(html?|css|js|mjs)$/i.test(file)) continue;
       const rel = path.relative(OUT, file).split(path.sep).join('/');
       // Off-origin HTML is somebody else's site. Parsing it for links turns a
       // mirror into an unbounded crawl of the whole web (one embedded map
       // widget is enough to do it). External hosts contribute assets only.
       if (rel.startsWith('_ext/') && /\.html?$/i.test(file)) continue;
       const text = fs.readFileSync(file, 'utf8');
-      for (const ref of extractRefs(text, /\.css$/i.test(file))) {
-        const abs = resolveRef(ref, rel);
+      const isJs = /\.m?js$/i.test(file);
+      const refs = isJs ? extractRefsFromJs(text) : extractRefs(text, /\.css$/i.test(file));
+      for (const ref of refs) {
+        const abs = resolveRef(ref, rel, isJs);
         if (abs && !haveUrl.has(abs)) candidates.add(abs);
       }
     }

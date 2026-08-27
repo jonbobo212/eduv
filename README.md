@@ -8,18 +8,32 @@ no wget, no jq.
 
 ## Status
 
-**The copy has not been made.** The Claude Code session this was built in sits
-behind an egress proxy that refuses `eduvisaconsulting.com` at the CONNECT
-stage (HTTP 403). No page, image, or stylesheet from the site was ever
-retrieved here, so nothing in this repo is derived from guesswork about the
-design — it is the machinery to do the copy, not the copy.
+**The copy is made.** `site/` holds a self-contained mirror of the live site:
+125 files, 48 MB, with every referenced asset present and every reference
+repointed locally. It renders standalone with the network off.
 
-Run it from an ordinary machine with normal internet access and you get the
-real thing. Every pass is tested end to end against a local fixture.
+What the site is: a **single-page React app**. All navigation is hash anchors
+(`#home`, `#services`, `#universities`, `#contact`), so one 297 KB HTML file is
+the whole site. A crawl reporting "1 page" is correct, not a failure.
 
-Note the `.com` is still **publicly served**, so mirroring needs no account
-access and no password — only a network that can reach it. Losing control of
-the domain does not prevent copying what it serves.
+Contents: 97 PNG, 12 JPG, 6 JS bundles, 2 CSS, 7 Inter woff2 fonts.
+
+Verified by loading the copy in Chromium at four breakpoints: every image
+request returns 200, and the only images that do not decode are the 11 sitting
+inside `DIV.reveal` scroll-reveal wrappers, which start at `opacity: 0` and are
+marked `loading="lazy"`. The live site behaves identically. Nothing is missing.
+
+### Known gaps
+
+- The page calls `api.eduvisaconsulting.com` for `banners`, `partners` and
+  `news`. `banners` and `news` return empty arrays upstream; `partners` returns
+  one item whose logo lives at `/api/uploads/`. That content is **not** part of
+  the static copy - if the relaunch needs it, it needs the API or hardcoded
+  replacements.
+- The Yandex map is an iframe and still loads from `yandex.uz`.
+- Social and contact links (Telegram, WhatsApp, Instagram, mail) stay remote,
+  which is correct - they are outbound links, not assets.
+- Forms render but do not submit. Backend was out of scope by request.
 
 ## Run it
 
