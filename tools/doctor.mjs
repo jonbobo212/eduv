@@ -1,4 +1,5 @@
 // Preflight. Tells you what is missing before you waste a long crawl on it.
+import './net.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromePath } from './browser.mjs';

@@ -10,6 +10,7 @@
 // broken image. This pass parses what we saved, finds every referenced URL we
 // don't yet have, and fetches it - repeating until nothing new turns up.
 
+import './net.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -40,14 +41,28 @@ const shortHash = (s) => {
   return (h >>> 0).toString(16).padStart(8, '0');
 };
 
-function localPathFor(rawUrl) {
+const EXT_BY_TYPE = [
+  [/text\/css/i, '.css'],
+  [/javascript|ecmascript/i, '.js'],
+  [/image\/png/i, '.png'], [/image\/jpe?g/i, '.jpg'], [/image\/gif/i, '.gif'],
+  [/image\/svg/i, '.svg'], [/image\/webp/i, '.webp'], [/image\/avif/i, '.avif'],
+  [/font\/woff2|application\/font-woff2/i, '.woff2'], [/font\/woff/i, '.woff'],
+  [/font\/ttf|application\/x-font-ttf/i, '.ttf'], [/font\/otf/i, '.otf'],
+  [/application\/json/i, '.json'],
+  [/video\/mp4/i, '.mp4'], [/video\/webm/i, '.webm'],
+  [/text\/html/i, '.html'],
+];
+const extFor = (ctype) => (EXT_BY_TYPE.find(([re]) => re.test(ctype ?? '')) ?? [null, '.bin'])[1];
+
+function localPathFor(rawUrl, ctype) {
   let u;
   try { u = new URL(rawUrl); } catch { return null; }
   if (!/^https?:$/.test(u.protocol)) return null;
   const external = u.host !== ORIGIN.host;
   let p = decodeURIComponent(u.pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  if (!path.extname(p)) p += '.html';
+  if (p.endsWith('/')) p += 'index' + (ctype ? extFor(ctype) : '.html');
+  // No extension in the path (e.g. /css2): take it from what the server said.
+  if (!path.extname(p)) p += ctype ? extFor(ctype) : '.html';
   if (u.search) {
     const ext = path.extname(p);
     p = p.slice(0, -ext.length) + '__q' + shortHash(u.search) + ext;
@@ -104,7 +119,12 @@ async function fetchOne(url) {
     redirect: 'follow',
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return Buffer.from(await res.arrayBuffer());
+  const ctype = res.headers.get('content-type') ?? '';
+  // An off-origin HTML response is a third-party page, not an asset we need.
+  if (/text\/html/i.test(ctype) && new URL(url).host !== ORIGIN.host) {
+    throw new Error('skipped: off-origin HTML');
+  }
+  return { body: Buffer.from(await res.arrayBuffer()), ctype };
 }
 
 async function main() {
@@ -118,6 +138,10 @@ async function main() {
     for (const file of walk(OUT)) {
       if (!/\.(html?|css)$/i.test(file)) continue;
       const rel = path.relative(OUT, file).split(path.sep).join('/');
+      // Off-origin HTML is somebody else's site. Parsing it for links turns a
+      // mirror into an unbounded crawl of the whole web (one embedded map
+      // widget is enough to do it). External hosts contribute assets only.
+      if (rel.startsWith('_ext/') && /\.html?$/i.test(file)) continue;
       const text = fs.readFileSync(file, 'utf8');
       for (const ref of extractRefs(text, /\.css$/i.test(file))) {
         const abs = resolveRef(ref, rel);
@@ -141,8 +165,8 @@ async function main() {
         const url = list.pop();
         haveUrl.add(url); // claim it up front so we never fetch it twice
         try {
-          const body = await fetchOne(url);
-          const rel = localPathFor(url);
+          const { body, ctype } = await fetchOne(url);
+          const rel = localPathFor(url, ctype);
           if (!rel) { fail++; continue; }
           const abs = path.join(OUT, rel);
           if (!abs.startsWith(OUT + path.sep)) { fail++; continue; }
