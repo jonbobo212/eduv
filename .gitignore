@@ -1,0 +1,7 @@
+node_modules/
+# Captured output - regenerate with `npm run copy`. Uncomment to commit the
+# mirror itself once you have run it.
+site/
+screenshots/
+diffs/
+audit/

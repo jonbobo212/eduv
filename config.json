@@ -1,0 +1,16 @@
+{
+  "origin": "https://eduvisaconsulting.com",
+  "outDir": "site",
+  "startPaths": ["/"],
+  "extraHosts": [],
+  "breakpoints": [
+    { "name": "mobile",  "width": 390,  "height": 844,  "dsf": 2 },
+    { "name": "tablet",  "width": 834,  "height": 1112, "dsf": 2 },
+    { "name": "laptop",  "width": 1440, "height": 900,  "dsf": 1 },
+    { "name": "desktop", "width": 1920, "height": 1080, "dsf": 1 }
+  ],
+  "maxPages": 100,
+  "scrollStepPx": 320,
+  "scrollDelayMs": 220,
+  "settleMs": 1200
+}

@@ -1,0 +1,21 @@
+{
+  "name": "eduv-mirror",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pixel-faithful static mirror of eduvisaconsulting.com",
+  "scripts": {
+    "mirror": "bash tools/mirror.sh",
+    "capture": "node tools/capture.mjs",
+    "rewrite": "node tools/rewrite.mjs",
+    "verify": "node tools/verify.mjs",
+    "serve": "bash tools/serve.sh",
+    "copy": "npm run mirror && npm run capture && npm run rewrite",
+    "postinstall": "node -e \"console.log('run: npx playwright install chromium')\""
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0",
+    "pixelmatch": "^6.0.0",
+    "pngjs": "^7.0.0"
+  }
+}
